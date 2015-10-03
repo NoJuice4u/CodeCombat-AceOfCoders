@@ -9,11 +9,13 @@ var previousAllyData;
 var enemyInQuadrants = { "Southwest":0, "South":0, "West":0, "Center":0, "East":0, "North":0, "Northeast":0 };
 var allyInQuadrants = { "Southwest":0, "South":0, "West":0, "Center":0, "East":0, "North":0, "Northeast":0 };
 var nearestGoliath = this.findNearest(this.findByType("goliath", enemies));
+var assignedJobIndex = 0;
+
 if(this.team == "humans")
 {
 	myQuadrants = [ "South", "West", "Center", "East", "North"];
 	restPoint = { "x": 55, "y": 45 };
-	home = { "x": 25, "y": 25 };
+	home = new Vector(25, 25);
 	away = { "x": 90, "y": 80 };
 	enemyTeam = "ogres";
 }
@@ -21,10 +23,31 @@ else
 {
 	myQuadrants = [ "North", "East", "Center", "West", "South" ];
 	restPoint = { "x": 70, "y": 55 };
-	home = { "x": 90, "y": 80 };
+	home = new Vector(90, 80);
 	away = { "x": 25, "y": 25 };
 	enemyTeam = "humans";
 }
+
+var jobQueue = {
+	"DefendA": {"Job": "Capture", "Quadrant": 1, "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"DefendB": {"Job": "Capture", "Quadrant": 2, "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"ArcherForceA": {"Job": "Assault", "TargetSize": 2, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"DefendC": {"Job": "Capture", "Quadrant": 4, "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"DefendD": {"Job": "Capture", "Quadrant": 5, "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"ArcherForceB": {"Job": "Assault", "TargetSize": 2, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"DefendE": {"Job": "Capture", "Quadrant": 3, "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"SiegeA": {"Job": "Siege", "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"SiegeB": {"Job": "Siege", "TargetSize": 1, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"GoNuts": {"Job": "Assault", "TargetSize": 100, "Members": [], "EscapeVector": new Vector(0, 0)},
+	"Tower": {"Job": "Tower", "TargetSize": 100, "Members": [], "EscapeVector": new Vector(0, 0)}
+};
+
+var roles = {
+	"soldier": ["Capture", "Fluff"],
+	"archer": ["Capture", "Assault", "Fluff"],
+	"artillery": ["Siege", "Fluff"],
+	"arrow-tower": ["Tower"]
+};
 
 var pointsMap = {};
 var points = this.getControlPoints();
@@ -38,57 +61,59 @@ for (var indx = 0; indx < points.length; ++indx) {
 // Mainly to pressure the goliath.  After that, archers.
 this.buildArmy = function()
 {
-	var type = "archer";
-	if(this.built.length >= initialBuildOrder.length)
+	loop
 	{
-		var fArchers = this.findByType("archer", friends);
-		var eArchers = this.findByType("archer", enemies);
-		fArcherCount = 0;
-		for(var fArcherIndex in fArchers)
+		var type = "archer";
+		if(this.built.length >= initialBuildOrder.length)
 		{
-			if(fArchers[fArcherIndex].health > 0) fArcherCount += 1;
+			var fArchers = this.findByType("archer", friends);
+			var eArchers = this.findByType("archer", enemies);
+			fArcherCount = 0;
+			for(var fArcherIndex in fArchers)
+			{
+				if(fArchers[fArcherIndex].health > 0) fArcherCount += 1;
+			}
+			
+			var fSoldiers = this.findByType("soldier", friends);
+			var fSoldierCount = 0;
+			for(var fSoldierIndex in fSoldiers)
+			{
+				if(fSoldiers[fSoldierIndex].health > 0) fSoldierCount += 1;
+			}
+
+			var fArtillery = this.findByType("artillery", friends);
+			var fArtilleryCount = 0;
+			for(var fArtilleryIndex in fArtillery)
+			{
+				if(fArtillery[fArtilleryIndex].health > 0) fArtilleryCount += 1;
+			}
+			
+			var fTowers = this.findByType("arrow-tower", friends);
+			var fTowerCount = 0;
+			for(var fTowerIndex in fTowers)
+			{
+				if(fTowers[fTowerIndex].health > 0) fTowerCount += 1;
+			}
+			
+			if(fArcherCount >= eArchers.length + 2 && fArcherCount > 2 && (fArtilleryCount < 2)) type = "artillery";
+			else if(fArcherCount * 2 < fSoldierCount) type = "archer";
+			// else if(fSoldierCount < myQuadrants.length) type = "soldier";
+			else type = "archer";
 		}
-		
-		var fSoldiers = this.findByType("soldier", friends);
-		var fSoldierCount = 0;
-		for(var fSoldierIndex in fSoldiers)
+		else
 		{
-			if(fSoldiers[fSoldierIndex].health > 0) fSoldierCount += 1;
+			type = initialBuildOrder[this.built.length];
 		}
 
-		var fArtillery = this.findByType("artillery", friends);
-		var fArtilleryCount = 0;
-		for(var fArtilleryIndex in fArtillery)
+		if (this.gold >= this.costOf(type))
 		{
-			if(fArtillery[fArtilleryIndex].health > 0) fArtilleryCount += 1;
+			this.summon(type);
+			this.assignJobs();
 		}
-		
-		var fTowers = this.findByType("arrow-tower", friends);
-		var fTowerCount = 0;
-		for(var fTowerIndex in fTowers)
+		else
 		{
-			if(fTowers[fTowerIndex].health > 0) fTowerCount += 1;
+			break;
 		}
-		
-		if(fArcherCount >= eArchers.length + 2 && fArcherCount > 2 && (fArtilleryCount < 2)) type = "artillery";
-		else if(fArcherCount * 2 < fSoldierCount) type = "archer";
-		// else if(fSoldierCount < myQuadrants.length) type = "soldier";
-		else type = "archer";
-	}
-	else
-	{
-		type = initialBuildOrder[this.built.length];
-	}
-
-	if (this.now() > 20 && type == "archer" && this.gold >= this.costOf(type) * 3)
-	{
-		this.summon(type);
-		this.summon(type);
-		this.summon(type);
-	}
-	else if (this.gold >= this.costOf(type))
-	{
-		this.summon(type);
 	}
 	// If the game let me, I'd hurl my own soldiers that I spawned to an unowned control point.  T.T
 };
@@ -113,8 +138,10 @@ this.controlHero = function()
 		}
 		if (nearestTower !== null && this.distanceTo(nearestTower) < 30) this.attack(nearestTower);
 		if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 25 && this.isReady("throw")) this.throw(nearestArtillery);
+		else if (nearestArcher !== null && this.distanceTo(nearestArcher) < 25 && this.isReady("throw")) this.throw(nearestArcher);
 		else if (nearestTower !== null && this.distanceTo(nearestTower) < 25 && this.isReady("throw")) this.throw(nearestTower);
-		if (this.distanceTo(nearestEnemy) < 3) this.hurl(nearestEnemy, home);
+		if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 5) this.attack(nearestArtillery);
+		if (this.distanceTo(nearestGoliath) < 8 && this.isReady("hurl")) this.hurl(nearestGoliath, home);
 		if (this.distanceTo(nearestEnemy) < 10 && this.isReady("stomp")) this.stomp();
 		if (this.distanceTo(nearestEnemy) < 20 && nearestEnemy.type != "archer") this.attack(nearestEnemy);
 		else this.move(restPoint);
@@ -139,52 +166,168 @@ this.findDangerZones = function()
 		// { "x": 45, "y": 35, "z":12.0 }
 	}
 };
-
-// Archer's job is to defend the goliath.  The goliath spawns our units so we should protect him.
-this.archerJob = function(friend)
+// DONT STAND IN FIRE!
+this.escapeFromDanger = function(pos, range)
 {
-	var escapeVector = this.escapeFromDanger(friend);
-	var fNearestArcher = friend.findNearest(archers);
-
-	if(escapeVector === false) if(this.escapeFromGiant(friend) === true) return;
-
-	for (var qKey in points)
+	var inDangerZone = false;
+	for(var dangerZoneKey in dangerZones)
 	{
-		var q = points[qKey];
-		if((allyInQuadrants[qKey] < 1 && friend.distanceTo(q.pos) <= 10) || (allyInQuadrants[qKey] === 0 && q.team === null))
+		if(pos.distance(dangerZones[dangerZoneKey].targetPos) < range && (dangerZones[dangerZoneKey].type == "boulder" || dangerZones[dangerZoneKey].pos.z > 4))
 		{
-			allyInQuadrants[qKey] += 1;
-			var heading;
-			if(escapeVector === false) heading = q.pos;
-			else 
-			{
-				var nVec = Vector.normalize(Vector.subtract(q.pos, friend.pos));
-				heading = Vector.add(Vector.multiply(Vector.add(escapeVector, nVec), 5), friend.pos);
-			}
-			this.command(friend, "defend", heading);
-			return;
+			inDangerZone = dangerZones[dangerZoneKey];
 		}
 	}
-	if(escapeVector !== false)
+	if(inDangerZone === false) return false;
+	var escapeVector = Vector.normalize(Vector.subtract(pos, inDangerZone.targetPos));
+	if(escapeVector.x === 0 && escapeVector.y === 0)
 	{
-		this.command(friend, "move", Vector.add(Vector.multiply(escapeVector, 6), friend.pos));
-		return;
+		escapeVector = Vector.normalize(Vector.subtract(pos, points[3].pos));
 	}
-	if(fNearestArcher !== null && friend.distanceTo(fNearestArcher) <= 25)
-	{
-		this.command(friend, "attack", fNearestArcher);
-		return;
-	}
-
-	this.command(friend, "defend", friend);
+	return escapeVector;
 };
 
-// Artillery's main job is to destroy enemy artillery, and siege capture points not under our control.
-// Sieging enemy capture points will help "Deny" the enemy funds.  However, because enemy artillery is
-// a massive potential threat, we attack those first.
-this.artilleryJob = function(friend)
+this.escapeFromGiant = function(friend)
 {
-	var escapeVector = this.escapeFromDanger(friend);
+	if(nearestGoliath === null) return;
+	if(nearestGoliath.pos.distance(friend.pos) > 15) return false;
+	this.command(friend, "move", Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(friend.pos, nearestGoliath.pos)), 8), friend.pos));
+	return true;
+};
+
+this.assignJobs = function()
+{
+	var newbieUnit = this.built[this.built.length-1];
+	for(var jobQueueKey in jobQueue)
+	{
+		if(jobQueue[jobQueueKey].Members.length < jobQueue[jobQueueKey].TargetSize)
+		{
+			for(var role in roles[newbieUnit.type])
+			{
+				if(roles[newbieUnit.type][role] == jobQueue[jobQueueKey].Job)
+				{
+					// this.say(roles[newbieUnit.type][role]);
+					jobQueue[jobQueueKey].Members.push(newbieUnit);
+					assignedJobIndex += 1;
+					return;
+				}
+			}
+		}
+		else
+		{
+			for(var memberKey in jobQueue[jobQueueKey].Members)
+			{
+				if(jobQueue[jobQueueKey].Members[memberKey].health <= 0)
+				{
+					// this.say(jobQueue[jobQueueKey].Job);
+					jobQueue[jobQueueKey].Members[memberKey] = newbieUnit;
+					assignedJobIndex += 1;
+					return;
+				}
+			}
+		}
+	}
+};
+
+this.capturePoint = function(friends, quadrant)
+{
+	var fNearestArcher = friends[0].findNearest(archers);
+	var distance = 999;
+	if(fNearestArcher !== null) distance = friends[0].distanceTo(fNearestArcher);
+
+	for(var allyCaptureJobIndex in friends)
+	{
+		var friend = friends[allyCaptureJobIndex];
+		var escapeVector = this.escapeFromDanger(friend.pos, 12);
+		if(escapeVector === false) if(this.escapeFromGiant(friend) === true) continue;
+
+		var q = points[quadrant];
+		allyInQuadrants[quadrant] += 1;
+		var heading;
+		if(escapeVector === false) heading = q.pos;
+		else 
+		{
+			var nVec = Vector.normalize(Vector.subtract(q.pos, friend.pos));
+			heading = Vector.add(Vector.multiply(Vector.add(escapeVector, nVec), 5), friend.pos);
+		}
+
+		if(distance <= 25)
+		{
+			this.command(friend, "attack", fNearestArcher);
+			continue;
+		}
+		else
+		{
+			this.command(friend, "defend", heading);
+		}
+	}
+};
+
+this.assault = function(friends, oldCombinedEscapeVector)
+{
+	var fNearestArcher = null;
+	var distance = 999;
+	
+	var combinedEscapeVector = new Vector(0, 0);
+
+	for(var allyCaptureJobIndex in friends)
+	{
+		var friend = friends[allyCaptureJobIndex];
+		if(friend.health <= 0) continue;
+		
+		fNearestArcher = friend.findNearest(this.findByType("archer", enemies));
+		if(fNearestArcher !== null) distance = friend.distanceTo(fNearestArcher);
+		
+		var escapeVector = this.escapeFromDanger(friend.pos, 14);
+		if(escapeVector === false) if(this.escapeFromGiant(friend) === true) continue;
+
+		if(escapeVector !== false)
+		{
+			combinedEscapeVector.add(escapeVector);
+			this.command(friend, "move", Vector.add(Vector.multiply(oldCombinedEscapeVector, 25), friend.pos));
+			continue;
+		}
+		else if(distance <= 25)
+		{
+			this.command(friend, "attack", fNearestArcher);
+			continue;
+		}
+		else
+		{
+			var fNearestThreat = fNearestArcher;
+			if(fNearestThreat === null) fNearestThreat = friend.findNearest(enemies);
+			if(fNearestThreat === null)
+			{
+				this.command(friend, "defend", this);
+			}
+			else
+			{
+				var nVec = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(fNearestThreat.pos, friend.pos)), 2), friend.pos);
+				escapeVector = this.escapeFromDanger(nVec, 20);
+				if(escapeVector === false)
+				{
+					this.command(friend, "attack", fNearestThreat);
+				}
+				else
+				{
+					combinedEscapeVector.add(escapeVector);
+					heading = Vector.add(Vector.multiply(Vector.add(oldCombinedEscapeVector, friend.pos), 50), friend.pos);
+					this.command(friend, "move", heading);
+				}
+			}
+		}
+	}
+
+	var vA = Vector.normalize(combinedEscapeVector);
+	var vB = Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos));
+	
+	return Vector.normalize(Vector.add(vA, vB));
+};
+
+this.siege = function(friends)
+{
+	// Only works with 1 so far
+	var friend = friends[0];
+	var escapeVector = this.escapeFromDanger(friend.pos, 12);
 	if(escapeVector !== false && friend.health > 70)
 	{
 		var escape = Vector.add(Vector.multiply(escapeVector, 8), friend.pos);
@@ -220,44 +363,6 @@ this.artilleryJob = function(friend)
 	}
 };
 
-// Towers.  They seem to be very powerful if there's no artillery around.  Fortunately, our artillery
-// is programmed to fight enemy artillery.
-this.towerJob = function(friend)
-{
-	var nearestEnemy = friend.findNearest(this.findByType("archer", enemies));
-	if(nearestEnemy === null || friend.distanceTo(nearestEnemy) <= 30) nearestEnemy = friend.findNearest(this.findByType("arrow-tower", enemies));
-	if(nearestEnemy === null || friend.distanceTo(nearestEnemy) > 30) nearestEnemy = friend.findNearest(enemies);
-	if(nearestEnemy !== null && friend.distanceTo(nearestEnemy) > 30) this.command(friend, "attack", nearestEnemy);
-};
-
-// DONT STAND IN FIRE!
-this.escapeFromDanger = function(friend)
-{
-	var inDangerZone = false;
-	for(var dangerZoneKey in dangerZones)
-	{
-		if(friend.distanceTo(dangerZones[dangerZoneKey].targetPos) < 20 && (dangerZones[dangerZoneKey].type == "boulder" || dangerZones[dangerZoneKey].pos.z > 4))
-		{
-			inDangerZone = dangerZones[dangerZoneKey];
-		}
-	}
-	if(inDangerZone === false) return false;
-	var escapeVector = Vector.normalize(Vector.subtract(friend.pos, inDangerZone.targetPos));
-	if(escapeVector.x === 0 && escapeVector.y === 0)
-	{
-		escapeVector = Vector.normalize(Vector.subtract(friend.pos, points[3].pos));
-	}
-	return escapeVector;
-};
-
-this.escapeFromGiant = function(friend)
-{
-	if(nearestGoliath === null) return;
-	if(nearestGoliath.pos.distance(friend.pos) > 17) return false;
-	this.command(friend, "move", Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(friend.pos, nearestGoliath.pos)), 8), friend.pos));
-	return true;
-};
-
 loop {
 	var fArcherCount = 0;
 	var dangerZones = [];
@@ -274,14 +379,13 @@ loop {
 
 	enemyInQuadrants = [0, 0, 0, 0, 0, 0, 0];
 	allyInQuadrants = [0, 0, 0, 0, 0, 0, 0];
-
-	for(var idx in friends)
+	
+	for(var jobQueueKey in jobQueue)
 	{
-		if(friends[idx].health <= 0) continue;
-		if(friends[idx].type == "soldier") this.archerJob(friends[idx]);
-		else if(friends[idx].type == "archer") this.archerJob(friends[idx]);
-		else if(friends[idx].type == "artillery") this.artilleryJob(friends[idx]);
-		else if(friends[idx].type == "arrow-tower") this.towerJob(friends[idx]);
+		if(jobQueue[jobQueueKey].Members.length === 0) continue;
+		if(jobQueue[jobQueueKey].Job == "Capture") this.capturePoint(jobQueue[jobQueueKey].Members, jobQueue[jobQueueKey].Quadrant);
+		else if(jobQueue[jobQueueKey].Job == "Assault") jobQueue[jobQueueKey].EscapeVector = this.assault(jobQueue[jobQueueKey].Members, jobQueue[jobQueueKey].EscapeVector);
+		else if(jobQueue[jobQueueKey].Job == "Siege") this.siege(jobQueue[jobQueueKey].Members);
 	}
 
 	this.controlHero();
