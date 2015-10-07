@@ -4,16 +4,12 @@ var home = {};
 var away = {};
 var enemyTeam = "";
 var initialBuildOrder = ["archer", "archer", "archer", "archer", "archer", "archer", "archer", "archer"];
-var previousAllyData;
 var nearestGoliath = this.findNearest(this.findByType("goliath", enemies));
 var assignedJobIndex = 0;
-var escapeDistance = 15;
-var nVecMultiplier = 10;
-var mid = new Vector(60, 50);
-var archerMoveMultiplier = 9;
 var lastArtillerySpawn = -10;
 var spawnTimer = -3;
 var scatterVector = false;
+var retreat = 0;
 
 if (this.team == "humans")
 {
@@ -30,13 +26,18 @@ else
 	enemyTeam = "humans";
 }
 
+var mid = new Vector(60, 50);
+
+// Job Definition table.  When I spawn a unit, I crawl down this table looking for an open
+// slot to assign a job.  Defending the nearest adjacent points take top priority, and then
+// I build an assault team of 6, using 2 teams of 3.
 var jobQueue = {
 	"DefendA": {"Job": "Capture", "Quadrant": 1, "TargetSize": 1, "Members": []},
 	"DefendB": {"Job": "Capture", "Quadrant": 2, "TargetSize": 1, "Members": []},
-	"ArcherForceA": {"Job": "Assault", "TargetSize": 2, "Members": []},
-	"ArcherForceB": {"Job": "Assault", "TargetSize": 2, "Members": []},
-	"ArcherForceC": {"Job": "Assault", "TargetSize": 2, "Members": []},
+	"ArcherForceA": {"Job": "Assault", "TargetSize": 3, "Members": []},
+	"ArcherForceB": {"Job": "Assault", "TargetSize": 3, "Members": []},
 	"DefendC": {"Job": "Capture", "Quadrant": 3, "TargetSize": 1, "Members": []},
+	"ArcherForceC": {"Job": "Assault", "TargetSize": 2, "Members": []},
 	"DefendD": {"Job": "Capture", "Quadrant": 4, "TargetSize": 1, "Members": []},
 	"DefendE": {"Job": "Capture", "Quadrant": 5, "TargetSize": 1, "Members": []},
 	"SiegeA": {"Job": "Siege", "TargetSize": 1, "Members": [], "RestPoint": new Vector(60, 70)},
@@ -54,16 +55,12 @@ var roles = {
 	"arrow-tower": ["Tower"]
 };
 
-var pointsMap = {};
-var points = this.getControlPoints();
-for (var indx = 0; indx < points.length; ++indx) {
-	pointsMap[points[indx]] = indx;
-}
-
 // First few summons are pre-determined.  Then, Attempt to maintain one soldier for each
 // capture point deemed interesting. Then, we aim to always have 1 artillery, unless we
 // somehow have lots of gold.  Then, ensure that we have an equal number of towers to artillery.
-// Mainly to pressure the goliath.  After that, archers.
+// Mainly to pressure the goliath.  After that, archers.  Due to the artillery acceleration
+// bug, I no longer spawn an artillery first, since whoever manages to exploit this bug first
+// has an advantage in that scenario.
 this.buildArmy = function()
 {
 	loop
@@ -121,7 +118,7 @@ this.buildArmy = function()
 			
 			if (fSoldierCount * 2 < eSoldierCount - 2) type = "soldier"; // Protection against mass soldiers.
 			else if (this.now() > 15 && myPoints + enemyPoints < 7 && fSoldierCount < 7 - enemyPoints - myPoints) type = "soldier"; // Capture!
-			else if (eArtilleryCount === 0 && fArrowTowersCount < 1) type = "arrow-tower";
+			else if (eArtilleryCount === 0 && fArrowTowersCount < 1 && nearestGoliath !== null && this.distanceTo(nearestGoliath) < 30) type = "arrow-tower"; // No enemy artillery?  Tower up!
 			else if (fArcherCount >= eArcherCount + 2 && fArcherCount > 2 && fArtilleryCount < 2 && lastArtillerySpawn < this.now()) type = "artillery"; // Maintain up to 2 artillery.
 			else if (fArcherCount > 8 && fSoldierCount < 2) type = "soldier"; // Meat Shield.
 			else type = "archer"; // Shoot things.  Things die.
@@ -134,20 +131,32 @@ this.buildArmy = function()
 
 		if (this.gold >= this.costOf(type))
 		{
+			if(nearestGoliath !== null) buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 5), this.pos);
+			else buildPos = this.pos;
 			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0) !== false && spawnTimer < this.now())
 			{
-				if (this.gold < 250 && nearestGoliath !== null && this.health * 2 > nearestGoliath.health)
+				// Withold the summoning in the event that we're near the enemy goliath.  One unit is nearly guaranteed to die, so we spawn multiple.
+				// Once we do have enough gold, we spawn 1 Arrow-Tower for it's high damage, and durability against an instant-kill.
+				if (this.gold < 250)
 				{
 					break;
 				}
 				else
 				{
+					// Induce a cooldown so that we actually spawn multiple units.
 					spawnTimer = this.now() + 3;
-					type = "arrow-tower";
+					if (fArrowTowersCount < 1) type = "arrow-tower";
 				}
 			}
 			if(type == "artillery") lastArtillerySpawn = this.now() + 5; // Induce a spawning cooldown for artillery so we don't spawn too many in a row
-			this.summon(type);
+			if(type == "arrow-tower" && this.distanceTo(home) >= 30 && nearestGoliath !== null && this.health < nearestGoliath.health)
+			{
+				// If it looks like I'm getting pressured by the enemy, put a tower between us and retreat.
+				// If the enemy has simple pathing logic, the tower will act as a block.
+				buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 5), this.pos);
+				retreat = this.now() + 20;
+			}
+			this.buildXY(type, buildPos.x, buildPos.y);
 			this.assignJobs();
 		}
 		else
@@ -159,22 +168,21 @@ this.buildArmy = function()
 
 this.controlHero = function() 
 {
-	var shouldAttack = this.now() > 90 || enemyPoints === 0;
 	if (nearestEnemy !== null)
 	{
 		// If the goliath wants to get up close and personal, make sure he has difficulty spawning archers,
 		// since archers are really the only ones that can outrun the goliath.
-		if(nearestGoliath !== null && this.health * 2 < nearestGoliath.health)
+		if(nearestGoliath !== null && (this.health * 2 < nearestGoliath.health || retreat > this.now()))
 		{
-			if (this.distanceTo(home) > 50)
+			if (nearestTower !== null && this.distanceTo(nearestTower) < 10 && this.distanceTo(home) > 75)
 			{
-				this.move(home);
+				this.attack(nearestTower);
 				return;
 			}
-			if (nearestGoliath !== null &&
-				this.distanceTo(nearestGoliath) < 8 &&
-				this.isReady("hurl"))
-					this.hurl(nearestGoliath, throwPoint);
+			if (nearestGoliath !== null && this.distanceTo(nearestGoliath) < 15 && this.isReady("hurl"))
+			{
+				if (this.distanceTo(mid) > 40 && this.distanceTo(mid) > nearestGoliath.pos.distance(mid)) this.hurl(nearestGoliath, throwPoint);
+			}
 			this.move(Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 10), this.pos));
 			return;
 		}
@@ -201,7 +209,7 @@ this.controlHero = function()
 			if (this.distanceTo(enemies[eIndex]) <= 10) numInStompRange += 1;
 		}
 		
-		// Hack for the "Artillery on Steriods" issue.
+		// Hack for the "Artillery on Steriods" issue, so I don't waste a throw.
 		if (this.now() > 7)
 		{
 			if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 25 && this.isReady("throw")) this.throw(nearestArtillery);
@@ -211,13 +219,16 @@ this.controlHero = function()
 		if (numInStompRange >= 3 && this.isReady("stomp")) this.stomp();
 		if (nearestGoliath !== null && this.distanceTo(away) < away.distance(nearestGoliath.pos) && this.isReady("stomp")) this.stomp();
 		var nearestPoint = this.findNearest(points);
+		
+		// Prepare the vector to throw the enemy goliath away from a control point, thereby allowing me to take control.
 		var throwPoint = Vector.add(Vector.subtract(this.pos, nearestPoint.pos), this.pos);
 		if (nearestGoliath !== null &&
 			this.distanceTo(nearestGoliath) < 8 &&
 			nearestPoint.pos.distance(this.pos) > nearestPoint.pos.distance(nearestGoliath.pos) &&
 			this.isReady("hurl"))
 				this.hurl(nearestGoliath, throwPoint);
-		if (this.distanceTo(nearestEnemy) < 25 && nearestEnemy.type != "archer") this.attack(nearestEnemy);
+		if (this.distanceTo(nearestEnemy) < 25 && nearestEnemy.type != "archer" && nearestEnemy.type != "goliath") this.attack(nearestEnemy);
+		if (this.distanceTo(restPoint) < 10) this.attack(nearestEnemy);
 		else this.move(restPoint);
 	}
 	else
@@ -230,7 +241,7 @@ this.controlHero = function()
 // slow missiles where we have a chance to escape.
 this.findDangerZones = function()
 {
-	if (nearestGoliath !== null) dangerZones.push({ "Point": nearestGoliath.pos, "Radius": 10, "Type": nearestGoliath.type});
+	if (nearestGoliath !== null) dangerZones.push({ "Point": nearestGoliath.pos, "Radius": 15, "Type": nearestGoliath.type});
 	for (var i = 0; i < missiles.length; ++i) 
 	{
 		var missile = missiles[i];
@@ -247,12 +258,18 @@ this.findDangerZones = function()
 	var enemyTowers = this.findByType("arrow-tower", enemies);
 	for (var towerIndex in enemyTowers) 
 	{
+		if(enemyTowers[towerIndex].target !== null && enemyTowers[towerIndex].target.type != "archer") continue;
 		enemy = enemyTowers[towerIndex];
 		dangerZones.push({ "Point": enemy.pos, "Radius": 30, "Type": enemy.type});
 	}
+	// Probably no longer used, because I found a better mechanism.  This was originally intended to scatter my archers but it proved to be too buggy.
 	myGoliathZone = [{ "Point": this.pos, "Radius": 10, "Type": this.type}];
 };
 
+// This is where things get serious.  Pathfinding logic to keep my fast units out of dangerous areas, and solve then
+// path it should travel to avoid danger, and get closer to the target destination simultaneously.  No more bouncing
+// back and forth, but running along the perimeter.  This nearly guarantees that my archer forces will be superior
+// to the enemy.
 this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange)
 {
 	var summedVector = new Vector(0, 0);
@@ -293,7 +310,7 @@ this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange)
 	
 	// if(inDanger === true && headingToDanger === true) return Vector.normalize(Vector.subtract(pos, averagedSum)); // GTFO
 	
-	if(this.now() <= 10) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Escape on tangent
+	if(this.now() <= 3) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Escape on tangent.  Probably not needed.
 	if(inDanger === false && headingToDanger === true) return newHeading; // Run on tangent
 	return Vector.normalize(Vector.add(Vector.normalize(Vector.subtract(pos, averagedSum)), newHeading)); // Escape on tangent
 };
@@ -321,6 +338,7 @@ this.assignJobs = function()
 		}
 		else
 		{
+			// This is nearly identical, but it replaces an element in the array, instead of appends.  Gotta replace the dead.
 			for(role in roles[newbieUnit.type])
 			{
 				for(var memberKey in jobQueue[jobQueueKey].Members)
@@ -339,6 +357,7 @@ this.assignJobs = function()
 	}
 };
 
+// Capture and defend the point.  Escape if under siege.
 this.capturePoint = function(friends, quadrant)
 {
 	var fNearestThreat = friends[0].findNearest(this.findByType("archer", enemies));
@@ -349,7 +368,7 @@ this.capturePoint = function(friends, quadrant)
 	{
 		var friend = friends[allyCaptureJobIndex];
 		var targetPos = points[quadrant].pos;
-		var escapeVector = this.getEscapeVector(friend.pos, targetPos, dangerZones, 25, 0);
+		var escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0);
 		
 		if(escapeVector === false)
 		{
@@ -369,6 +388,7 @@ this.capturePoint = function(friends, quadrant)
 	}
 };
 
+// Attack!  Stay out of fire!  DIE!
 this.assault = function(friends)
 {
 	var combinedEscapeVector = false;
@@ -377,12 +397,15 @@ this.assault = function(friends)
 	var nearbyArchers = [];
 	var enemyArchers = this.findByType("archer", enemies);
 	
+	// This originally was intended to allow a pair of archers to simultaneously target the same enemy, since I wanted my archers to work in pairs.
+	// Looks like most of the logic for this case isn't used, but it's too dangerous for me to change it.
 	for(var friendIndex in friends)
 	{
 		var friend = friends[friendIndex];
-		if (friend.health <= 0 && friend.type == "artillery") continue;
+		if (friend.health <= 0 && friend.type == "artillery") continue; // A hack for when there was a bugh with AssignJobs.  The health check is necessary, but the artillery check shouldn't be.
 		assaultMembers.push(friend);
 
+		// Not used.  Was meant to make the archers within the same group escape on the same vector.  getEscapeVector has been improved to the point where it doesn't matter anymore.
 		if (averagedVectorPos === false) averagedVectorPos = friend.pos;
 		averagedVectorPos = Vector.divide(Vector.add(averagedVectorPos, friend.pos), 2);
 
@@ -390,6 +413,7 @@ this.assault = function(friends)
 		if (fNearestArcher !== null) nearbyArchers.push(fNearestArcher);
 	}
 
+	var alternator = 1;
 	for(var memberIndex in assaultMembers)
 	{
 		friend = assaultMembers[memberIndex];
@@ -397,23 +421,35 @@ this.assault = function(friends)
 		var fNearestThreat = null;
 		
 		var nearestThreat = friend.findNearest(this.findByType("artillery", enemies));
+		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 25) nearestThreat = friend.findNearest("arrow-tower", enemies);
 		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 25) nearestThreat = friend.findNearest(enemyArchers);
 		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 25) nearestThreat = nearestArtillery;
-		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 50) nearestThreat = friend.findNearest(enemies);
+		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 35) nearestThreat = friend.findNearest(enemies);
 		if(nearestThreat === null) nearestThreat = nearestGoliath;
 
-		escapeVector = this.getEscapeVector(friend.pos, nearestThreat.pos, dangerZones, 25, 0);
+		// Early-game, this is to split my archer forces in half, so that they will effectively go around the enemy goliath
+		// and pincer the enemy.  In addition, it generally gets them close enough to the north/south capture point to also
+		// deny the opponent that spot.
+		if(this.now() <= 6)
+		{
+			if (alternator === 0)
+			{
+				alternator = 1;
+				escapeVector = this.getEscapeVector(friend.pos, new Vector(85, 25), dangerZones, 25, 0);
+			}
+			else 
+			{
+				alternator = 0;
+				escapeVector = this.getEscapeVector(friend.pos, new Vector(40, 75), dangerZones, 25, 0);
+			}
+		}
+		else escapeVector = this.getEscapeVector(friend.pos, nearestThreat.pos, dangerZones, 25, 0);
 
 		if(escapeVector === false)
 		{
 			if(nearestThreat !== null)
 			{
-				if(this.now() <= 5) 
-				{
-					var scatterVector = this.getEscapeVector(friend.pos, friend.pos, myGoliathZone, 15, 0);
-					if(scatterVector !== false) this.command(friend, "move", Vector.add(Vector.multiply(scatterVector, 10), friend.pos));
-				}
-				else this.command(friend, "attack", nearestThreat);
+				this.command(friend, "attack", nearestThreat);
 				continue;
 			}
 			else
@@ -431,6 +467,10 @@ this.assault = function(friends)
 	}
 };
 
+// 1. Kill Artillery
+// 2. Kill Towers in range
+// 3. Siege capture points under enemy control
+// 4. Find towers to kill
 this.siege = function(friends)
 {
 	// Attack Queue
@@ -494,6 +534,7 @@ this.siege = function(friends)
 	}
 };
 
+// Defense logic.  Protect the artillery.
 this.defend = function(friends)
 {
 	var artilleries = this.findByType("artillery", friends);
@@ -535,7 +576,7 @@ loop {
 	var fArcherCount = 0;
 	var dangerZones = [];
 	// dangerZones.push(nearestGoliath.pos);
-	points = this.getControlPoints();
+	var points = this.getControlPoints();
 	var missiles = this.findByType("shell", this.findEnemyMissiles())
 		.concat(this.findByType("boulder", this.findEnemyMissiles()))
 		.concat(this.findByType("shell", this.findFriendlyMissiles()))
