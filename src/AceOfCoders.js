@@ -3,7 +3,7 @@ var restPoint = {};
 var home = {};
 var away = {};
 var enemyTeam = "";
-var initialBuildOrder = ["archer", "archer", "archer", "archer", "archer", "archer", "archer", "archer"];
+var initialBuildOrder = ["artillery", "archer", "archer", "archer", "archer"];
 var nearestGoliath = this.findNearest(this.findByType("goliath", enemies));
 var assignedJobIndex = 0;
 var lastArtillerySpawn = -10;
@@ -133,11 +133,12 @@ this.buildArmy = function()
 		{
 			if(nearestGoliath !== null) buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 5), this.pos);
 			else buildPos = this.pos;
-			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0) !== false && spawnTimer < this.now())
+			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0, "goliath") !== false) break;
+			if (nearestGoliath !== null && this.distanceTo(nearestGoliath) < 15 && spawnTimer < this.now())
 			{
 				// Withold the summoning in the event that we're near the enemy goliath.  One unit is nearly guaranteed to die, so we spawn multiple.
 				// Once we do have enough gold, we spawn 1 Arrow-Tower for it's high damage, and durability against an instant-kill.
-				if (this.gold < 250)
+				if (this.gold < 150)
 				{
 					break;
 				}
@@ -149,13 +150,13 @@ this.buildArmy = function()
 				}
 			}
 			if(type == "artillery") lastArtillerySpawn = this.now() + 5; // Induce a spawning cooldown for artillery so we don't spawn too many in a row
-			if(type == "arrow-tower" && this.distanceTo(home) >= 30 && nearestGoliath !== null && this.health < nearestGoliath.health)
+			if(type == "arrow-tower" && this.distanceTo(home) >= 30 && nearestGoliath !== null && this.health * 1.75 < nearestGoliath.health)
 			{
 				// If it looks like I'm getting pressured by the enemy, put a tower between us and retreat.
 				// If the enemy has simple pathing logic, the tower will act as a block.
-				buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 5), this.pos);
 				retreat = this.now() + 20;
 			}
+			if(type == "arrow-tower") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 5), this.pos);
 			this.buildXY(type, buildPos.x, buildPos.y);
 			this.assignJobs();
 		}
@@ -172,7 +173,7 @@ this.controlHero = function()
 	{
 		// If the goliath wants to get up close and personal, make sure he has difficulty spawning archers,
 		// since archers are really the only ones that can outrun the goliath.
-		if(nearestGoliath !== null && (this.health * 2 < nearestGoliath.health || retreat > this.now()))
+		if(nearestGoliath !== null && (this.health * 1.75 < nearestGoliath.health || retreat > this.now()))
 		{
 			if (nearestTower !== null && this.distanceTo(nearestTower) < 10 && this.distanceTo(home) > 75)
 			{
@@ -201,7 +202,6 @@ this.controlHero = function()
 			this.attack(nearestSoldier);
 			return;
 		}
-		if (nearestTower !== null && this.distanceTo(nearestTower) < 30) this.attack(nearestTower);
 		
 		var numInStompRange = 0;
 		for(var eIndex in enemies)
@@ -270,7 +270,7 @@ this.findDangerZones = function()
 // path it should travel to avoid danger, and get closer to the target destination simultaneously.  No more bouncing
 // back and forth, but running along the perimeter.  This nearly guarantees that my archer forces will be superior
 // to the enemy.
-this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange)
+this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange, excludeType)
 {
 	var summedVector = new Vector(0, 0);
 	var targetPos = Vector.add(pos, Vector.multiply(Vector.normalize(Vector.subtract(tar, pos)), 10));
@@ -280,6 +280,7 @@ this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange)
 	var divisor = 0;
 	for(var dangerZoneKey in dangerObjects)
 	{
+		if(dangerObjects[dangerZoneKey].Type == excludeType) continue;
 		if (pos.distance(dangerObjects[dangerZoneKey].Point) <= dangerObjects[dangerZoneKey].Radius)
 		{
 			inDanger = true;
@@ -368,7 +369,7 @@ this.capturePoint = function(friends, quadrant)
 	{
 		var friend = friends[allyCaptureJobIndex];
 		var targetPos = points[quadrant].pos;
-		var escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0);
+		var escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0, "none");
 		
 		if(escapeVector === false)
 		{
@@ -435,15 +436,15 @@ this.assault = function(friends)
 			if (alternator === 0)
 			{
 				alternator = 1;
-				escapeVector = this.getEscapeVector(friend.pos, new Vector(85, 25), dangerZones, 25, 0);
+				escapeVector = this.getEscapeVector(friend.pos, new Vector(85, 25), dangerZones, 25, 0, "none");
 			}
 			else 
 			{
 				alternator = 0;
-				escapeVector = this.getEscapeVector(friend.pos, new Vector(40, 75), dangerZones, 25, 0);
+				escapeVector = this.getEscapeVector(friend.pos, new Vector(40, 75), dangerZones, 25, 0, "none");
 			}
 		}
-		else escapeVector = this.getEscapeVector(friend.pos, nearestThreat.pos, dangerZones, 25, 0);
+		else escapeVector = this.getEscapeVector(friend.pos, nearestThreat.pos, dangerZones, 25, 0, "none");
 
 		if(escapeVector === false)
 		{
@@ -527,7 +528,7 @@ this.siege = function(friends)
 		
 		var restHeading = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(restPoint, friend.pos)), 10), friend.pos);
 		
-		escapeVector = this.getEscapeVector(friend.pos, restHeading, dangerZones, 65, 0);
+		escapeVector = this.getEscapeVector(friend.pos, restHeading, dangerZones, 65, 0, "none");
 		
 		if (target !== false && friend.pos.distance(target.pos) < 65) this.command(friend, "attackPos", target.pos);
 		else this.command(friend, "move", restHeading);
