@@ -136,7 +136,7 @@ this.buildArmy = function()
 		{
 			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0) !== false && spawnTimer < this.now())
 			{
-				if (this.gold < 250)
+				if (this.gold < 250 && nearestGoliath !== null && this.health * 2 > nearestGoliath.health)
 				{
 					break;
 				}
@@ -398,7 +398,7 @@ this.assault = function(friends)
 		
 		var nearestThreat = friend.findNearest(this.findByType("artillery", enemies));
 		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 25) nearestThreat = friend.findNearest(enemyArchers);
-		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 40) nearestThreat = nearestArtillery;
+		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 25) nearestThreat = nearestArtillery;
 		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 50) nearestThreat = friend.findNearest(enemies);
 		if(nearestThreat === null) nearestThreat = nearestGoliath;
 
