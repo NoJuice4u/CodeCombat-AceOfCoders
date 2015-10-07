@@ -1,5 +1,4 @@
 // Initialize key variables based on what side we belong to in order to reflect the "Mirroring"
-var myQuadrants = [];
 var restPoint = {};
 var home = {};
 var away = {};
@@ -14,10 +13,10 @@ var mid = new Vector(60, 50);
 var archerMoveMultiplier = 9;
 var lastArtillerySpawn = -10;
 var spawnTimer = -3;
+var scatterVector = false;
 
 if (this.team == "humans")
 {
-	myQuadrants = [ "South", "West", "Center", "East", "North"];
 	restPoint = new Vector(70, 60);
 	home = new Vector(25, 25);
 	away = new Vector(90, 80);
@@ -25,7 +24,6 @@ if (this.team == "humans")
 }
 else 
 {
-	myQuadrants = [ "North", "East", "Center", "West", "South" ];
 	restPoint = new Vector(50, 40);
 	home = new Vector(90, 80);
 	away = new Vector(25, 25);
@@ -164,14 +162,22 @@ this.controlHero = function()
 	var shouldAttack = this.now() > 90 || enemyPoints === 0;
 	if (nearestEnemy !== null)
 	{
-		if (shouldAttack)
-		{
-			if (nearestGoliath !== null) this.attack(nearestGoliath);
-			else this.attack(nearestEnemy);
-			return;
-		}
 		// If the goliath wants to get up close and personal, make sure he has difficulty spawning archers,
 		// since archers are really the only ones that can outrun the goliath.
+		if(nearestGoliath !== null && this.health * 2 < nearestGoliath.health)
+		{
+			if (this.distanceTo(home) > 50)
+			{
+				this.move(home);
+				return;
+			}
+			if (nearestGoliath !== null &&
+				this.distanceTo(nearestGoliath) < 8 &&
+				this.isReady("hurl"))
+					this.hurl(nearestGoliath, throwPoint);
+			this.move(Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 10), this.pos));
+			return;
+		}
 		if (nearestTower !== null && this.distanceTo(nearestTower) < 25)
 		{
 			this.attack(nearestTower);
@@ -204,8 +210,6 @@ this.controlHero = function()
 		if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 5) this.attack(nearestArtillery);
 		if (numInStompRange >= 3 && this.isReady("stomp")) this.stomp();
 		if (nearestGoliath !== null && this.distanceTo(away) < away.distance(nearestGoliath.pos) && this.isReady("stomp")) this.stomp();
-		// if (nearestGoliath !== null && this.distanceTo(away) < away.distance(nearestGoliath.pos) && this.distanceTo(nearestGoliath) < 12 && this.isReady("hurl")) 
-			// this.hurl(nearestGoliath, away);
 		var nearestPoint = this.findNearest(points);
 		var throwPoint = Vector.add(Vector.subtract(this.pos, nearestPoint.pos), this.pos);
 		if (nearestGoliath !== null &&
@@ -246,6 +250,7 @@ this.findDangerZones = function()
 		enemy = enemyTowers[towerIndex];
 		dangerZones.push({ "Point": enemy.pos, "Radius": 30, "Type": enemy.type});
 	}
+	myGoliathZone = [{ "Point": this.pos, "Radius": 10, "Type": this.type}];
 };
 
 this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange)
@@ -394,7 +399,7 @@ this.assault = function(friends)
 		var nearestThreat = friend.findNearest(this.findByType("artillery", enemies));
 		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 25) nearestThreat = friend.findNearest(enemyArchers);
 		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 40) nearestThreat = nearestArtillery;
-		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 40) nearestThreat = friend.findNearest(enemies);
+		if(nearestThreat === null || friend.distanceTo(nearestThreat) > 50) nearestThreat = friend.findNearest(enemies);
 		if(nearestThreat === null) nearestThreat = nearestGoliath;
 
 		escapeVector = this.getEscapeVector(friend.pos, nearestThreat.pos, dangerZones, 25, 0);
@@ -403,7 +408,12 @@ this.assault = function(friends)
 		{
 			if(nearestThreat !== null)
 			{
-				this.command(friend, "attack", nearestThreat);
+				if(this.now() <= 5) 
+				{
+					var scatterVector = this.getEscapeVector(friend.pos, friend.pos, myGoliathZone, 15, 0);
+					if(scatterVector !== false) this.command(friend, "move", Vector.add(Vector.multiply(scatterVector, 10), friend.pos));
+				}
+				else this.command(friend, "attack", nearestThreat);
 				continue;
 			}
 			else
