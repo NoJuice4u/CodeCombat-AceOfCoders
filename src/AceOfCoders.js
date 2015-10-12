@@ -133,6 +133,7 @@ this.buildArmy = function()
 		{
 			if(nearestGoliath !== null) buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 5), this.pos);
 			else buildPos = this.pos;
+			if(this.now() < 10 && type == "artillery") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 5), this.pos);
 			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0, "goliath") !== false) break;
 
 			if(type == "artillery") lastArtillerySpawn = this.now() + 5; // Induce a spawning cooldown for artillery so we don't spawn too many in a row
@@ -494,11 +495,6 @@ this.siege = function(friends)
 	{
 		var friend = friends[friendIndex];
 		if (friend.health <= 0) continue;
-		if (this.now() < 5 && nearestGoliath !== null)
-		{
-			this.command(friend, "attackPos", Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, friend.pos)), 65), friend.pos));
-			continue;
-		}
 
 		var atkDistance = 999;
 		var atkIndex = 0;
@@ -507,7 +503,7 @@ this.siege = function(friends)
 		{
 			if (friend.pos.distance(priorityQueue[attackIndex].pos) < atkDistance && friend.pos.distance(priorityQueue[attackIndex].pos) > 15 && priorityQueueAssigned[attackIndex] === false)
 			{
-				if (priorityQueue[attackIndex].type == "artillery" && friend.pos.distance(priorityQueue[attackIndex].pos) < 65) atkDistance = 0;
+				if (priorityQueue[attackIndex].type == "artillery" && friend.pos.distance(priorityQueue[attackIndex].pos) < 85) atkDistance = 0;
 				else if (priorityQueue[attackIndex].type == "arrow-tower") atkDistance = friend.pos.distance(priorityQueue[attackIndex].pos)-10;
 				else atkDistance = friend.pos.distance(priorityQueue[attackIndex].pos);
 				atkIndex = attackIndex;
@@ -605,3 +601,4 @@ loop {
 	this.controlHero();
 	this.buildArmy();
 }
+
