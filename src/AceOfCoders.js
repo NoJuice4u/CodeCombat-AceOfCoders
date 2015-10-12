@@ -43,7 +43,6 @@ var jobQueue = {
 	"SiegeA": {"Job": "Siege", "TargetSize": 1, "Members": [], "RestPoint": new Vector(60, 70)},
 	"SiegeB": {"Job": "Siege", "TargetSize": 1, "Members": [], "RestPoint": new Vector(60, 30)},
 	"SiegeC": {"Job": "Siege", "TargetSize": 4, "Members": []},
-	"Guard": {"Job": "Guard", "TargetSize": 2, "Members": []},
 	"GoNuts": {"Job": "Defend", "TargetSize": 100, "Members": []},
 	"Tower": {"Job": "Tower", "TargetSize": 100, "Members": []}
 };
@@ -133,7 +132,7 @@ this.buildArmy = function()
 		{
 			if(nearestGoliath !== null) buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 5), this.pos);
 			else buildPos = this.pos;
-			if(this.now() < 10 && type == "artillery") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 5), this.pos);
+			if(this.now() < 10 && type == "artillery") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 6), this.pos);
 			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0, "goliath") !== false) break;
 
 			if(type == "artillery") lastArtillerySpawn = this.now() + 5; // Induce a spawning cooldown for artillery so we don't spawn too many in a row
@@ -144,6 +143,8 @@ this.buildArmy = function()
 				retreat = this.now() + 20;
 			}
 			this.buildXY(type, buildPos.x, buildPos.y);
+			// HACK
+			if(type == "artillery") this.siege([this.built[this.built.length-1]], this.pos);
 			this.assignJobs();
 		}
 		else
@@ -478,6 +479,7 @@ this.siege = function(friends)
 	var eTower = this.findByType("arrow-tower", enemies);
 	for(var eTowerIndex in eTower)
 	{
+		if(eTower[eTowerIndex].team != enemyTeam) continue;  // Hack, otherwise I siege my own tower.  Probably an initialization issue?
 		priorityQueue.push(eTower[eTowerIndex]);
 		priorityQueueAssigned.push(false);
 	}
@@ -566,10 +568,18 @@ loop {
 	var dangerZones = [];
 	// dangerZones.push(nearestGoliath.pos);
 	var points = this.getControlPoints();
+	for(var pKey in points)
+	{
+		if (points[pKey].team == enemyTeam) enemyPoints += 1;
+		else if (points[pKey].team == this.team) myPoints += 1;
+	}
+	
 	var missiles = this.findByType("shell", this.findEnemyMissiles())
 		.concat(this.findByType("boulder", this.findEnemyMissiles()))
 		.concat(this.findByType("shell", this.findFriendlyMissiles()))
 		.concat(this.findByType("boulder", this.findFriendlyMissiles()));
+	this.buildArmy();
+
 	var friends = this.built;
 	var enemies = this.findEnemies();
 	var nearestEnemy = this.findNearest(enemies);
@@ -579,26 +589,18 @@ loop {
 	var nearestArtillery = this.findNearest(this.findByType("artillery", enemies));
 	var myPoints = 0;
 	var enemyPoints = 0;
-	for(var pKey in points)
-	{
-		if (points[pKey].team == enemyTeam) enemyPoints += 1;
-		else if (points[pKey].team == this.team) myPoints += 1;
-	}
 
 	this.findDangerZones();
+	this.tower(this.findByType("arrow-tower", friends));
 
 	for(var jobQueueKey in jobQueue)
 	{
 		if (jobQueue[jobQueueKey].Members.length === 0) continue;
 		else if (jobQueue[jobQueueKey].Job == "Capture") this.capturePoint(jobQueue[jobQueueKey].Members, jobQueue[jobQueueKey].Quadrant);
-		else if (jobQueue[jobQueueKey].Job == "Assault") jobQueue[jobQueueKey].EscapeVector = this.assault(jobQueue[jobQueueKey].Members);
+		else if (jobQueue[jobQueueKey].Job == "Assault") this.assault(jobQueue[jobQueueKey].Members);
 		else if (jobQueue[jobQueueKey].Job == "Siege") this.siege(jobQueue[jobQueueKey].Members, jobQueue[jobQueueKey].RestPoint);
 		else if (jobQueue[jobQueueKey].Job == "Defend") this.defend(jobQueue[jobQueueKey].Members);
-		// else if (jobQueue[jobQueueKey].Job == "Guard") this.guard(jobQueue[jobQueueKey].Members);
 	}
-
-	this.tower(this.findByType("arrow-tower", friends));
 	this.controlHero();
-	this.buildArmy();
 }
 
