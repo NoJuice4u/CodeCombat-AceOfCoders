@@ -134,21 +134,7 @@ this.buildArmy = function()
 			if(nearestGoliath !== null) buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 5), this.pos);
 			else buildPos = this.pos;
 			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0, "goliath") !== false) break;
-			if (nearestGoliath !== null && this.distanceTo(nearestGoliath) < 15 && spawnTimer < this.now())
-			{
-				// Withold the summoning in the event that we're near the enemy goliath.  One unit is nearly guaranteed to die, so we spawn multiple.
-				// Once we do have enough gold, we spawn 1 Arrow-Tower for it's high damage, and durability against an instant-kill.
-				if (this.gold < 150)
-				{
-					break;
-				}
-				else
-				{
-					// Induce a cooldown so that we actually spawn multiple units.
-					spawnTimer = this.now() + 3;
-					if (fArrowTowersCount < 1) type = "arrow-tower";
-				}
-			}
+
 			if(type == "artillery") lastArtillerySpawn = this.now() + 5; // Induce a spawning cooldown for artillery so we don't spawn too many in a row
 			if(type == "arrow-tower" && this.distanceTo(home) >= 30 && nearestGoliath !== null && this.health * 1.75 < nearestGoliath.health)
 			{
@@ -156,7 +142,6 @@ this.buildArmy = function()
 				// If the enemy has simple pathing logic, the tower will act as a block.
 				retreat = this.now() + 20;
 			}
-			if(type == "arrow-tower") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 5), this.pos);
 			this.buildXY(type, buildPos.x, buildPos.y);
 			this.assignJobs();
 		}
@@ -192,7 +177,7 @@ this.controlHero = function()
 			this.attack(nearestTower);
 			return;
 		}
-		if (nearestArcher !== null && this.distanceTo(nearestArcher) < 5)
+		if (nearestArcher !== null && this.distanceTo(nearestArcher) < 7)
 		{
 			this.attack(nearestArcher);
 			return;
@@ -214,6 +199,7 @@ this.controlHero = function()
 		{
 			if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 25 && this.isReady("throw")) this.throw(nearestArtillery);
 			else if (nearestTower !== null && this.distanceTo(nearestTower) < 25 && this.isReady("throw")) this.throw(nearestTower);
+			else if (nearestArcher !== null && this.distanceTo(nearestArcher) < 25 && nearestGoliath.gold < 25 && this.isReady("throw")) this.throw(nearestArcher);
 		}
 		if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 5) this.attack(nearestArtillery);
 		if (numInStompRange >= 3 && this.isReady("stomp")) this.stomp();
@@ -228,7 +214,7 @@ this.controlHero = function()
 			this.isReady("hurl"))
 				this.hurl(nearestGoliath, throwPoint);
 		if (this.distanceTo(nearestEnemy) < 25 && nearestEnemy.type != "archer" && nearestEnemy.type != "goliath") this.attack(nearestEnemy);
-		if (this.distanceTo(restPoint) < 10) this.attack(nearestEnemy);
+		else if (this.distanceTo(restPoint) < 10) this.attack(nearestEnemy);
 		else this.move(restPoint);
 	}
 	else
@@ -246,7 +232,7 @@ this.findDangerZones = function()
 	{
 		var missile = missiles[i];
 		if (missile.type == "shell") dangerZones.push({ "Point": missile.targetPos, "Radius": 17, "Type": missile.type});
-		else if (missile.type == "boulder") dangerZones.push({ "Point": missile.targetPos, "Radius": 17, "Type": missile.type});
+		else if (missile.type == "boulder") dangerZones.push({ "Point": missile.targetPos, "Radius": 12, "Type": missile.type});
 		// { "x": 45, "y": 35, "z":12.0 }
 	}
 	var enemySoldiers = this.findByType("soldier", enemies);
@@ -371,6 +357,11 @@ this.capturePoint = function(friends, quadrant)
 		var targetPos = points[quadrant].pos;
 		var escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0, "none");
 		
+		if(this.now() < 5)
+		{
+			this.command(friend, "move", targetPos);
+			continue;
+		}
 		if(escapeVector === false)
 		{
 			this.command(friend, "defend", targetPos);
@@ -516,7 +507,7 @@ this.siege = function(friends)
 		{
 			if (friend.pos.distance(priorityQueue[attackIndex].pos) < atkDistance && friend.pos.distance(priorityQueue[attackIndex].pos) > 15 && priorityQueueAssigned[attackIndex] === false)
 			{
-				if (priorityQueue[attackIndex].type == "artillery") atkDistance = friend.pos.distance(priorityQueue[attackIndex].pos)/2;
+				if (priorityQueue[attackIndex].type == "artillery" && friend.pos.distance(priorityQueue[attackIndex].pos) < 65) atkDistance = 0;
 				else if (priorityQueue[attackIndex].type == "arrow-tower") atkDistance = friend.pos.distance(priorityQueue[attackIndex].pos)-10;
 				else atkDistance = friend.pos.distance(priorityQueue[attackIndex].pos);
 				atkIndex = attackIndex;
@@ -531,6 +522,7 @@ this.siege = function(friends)
 		escapeVector = this.getEscapeVector(friend.pos, restHeading, dangerZones, 65, 0, "none");
 		
 		if (target !== false && friend.pos.distance(target.pos) < 65) this.command(friend, "attackPos", target.pos);
+		else if (escapeVector !== false) this.command(friend, "move", Vector.add(friend.pos, Vector.multiply(escapeVector, 10)));
 		else this.command(friend, "move", restHeading);
 	}
 };
@@ -567,8 +559,8 @@ this.tower = function(friends)
 		friend = friends[towerIndex];
 		if(friend.health <= 0) continue;
 		var eTar = friend.findNearest(this.findByType("archer", enemies));
-		if(eTar === null) eTar = friend.findNearest(this.findByType("soldier", enemies));
-		if(eTar === null) eTar = friend.findNearest(enemies);
+		if(eTar === null || friend.distanceTo(eTar) > 30) eTar = friend.findNearest(this.findByType("soldier", enemies));
+		if(eTar === null || friend.distanceTo(eTar) > 30) eTar = friend.findNearest(enemies);
 		this.command(friend, "attack", eTar);
 	}
 };
