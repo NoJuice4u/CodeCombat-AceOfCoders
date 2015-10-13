@@ -132,7 +132,7 @@ this.buildArmy = function()
 		{
 			if(nearestGoliath !== null) buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 5), this.pos);
 			else buildPos = this.pos;
-			if(this.now() < 10 && type == "artillery") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 6), this.pos);
+			if(nearestGoliath !== null && this.now() < 10 && type == "artillery") buildPos = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(nearestGoliath.pos, this.pos)), 6), this.pos);
 			if (this.getEscapeVector(this.pos, this.pos, dangerZones, 16, 0, "goliath") !== false) break;
 
 			if(type == "artillery") lastArtillerySpawn = this.now() + 5; // Induce a spawning cooldown for artillery so we don't spawn too many in a row

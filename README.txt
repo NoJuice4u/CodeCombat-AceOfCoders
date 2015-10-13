@@ -1,5 +1,16 @@
 [KNOWN ISSUES]
 - There's something weird with the escape vector calculations when the target is in multiple danger zones.  It might involve the edge case where the unit is in only one danger zone, but the predicted path sits in another danger zone.  It's been observed that the AI will actually walk into one of the danger zones instead of finding the optimal path out.
+- Logic for capturing points is not optimal.  If danger zones exist between the capture point and unit, it bounces for some reason even though it's the same logic as the assault logic.
+[Version 14]
+- Added a null check.  Stupid nulls.
+[Version 13]
+- Hacked in a command to spawned artillery to prevent the automatic AI from attacking the first nearest unit, which can cost me the match againt opponents that pause to spawn.
+- Hacked in a check so I don't siege my own tower.
+- Shuffled the order of some of the logic when I was debugging the "Automatic AI kicking in" issue.  Couldn't figure it out so I hacked a fix instead and was too lazy to revert.
+[Version 12]
+- Spawn opening artillery closest to opponent for sieging.
+- With one of the earlier siege updates, no need to immediately attack a hardcoded position.  It's weak against AI where the enemy pauses to spawn, or moves away to spawn.
+- Distance Adjustment.  If the enemy artilllery is within 20 units of the max range, just go after it, instead of risking being shot by it while attacking something else.
 [Version 11]
 - Removed the gold buffering when near the enemy goliath.
 - Now places the arrow-tower away from the enemy goliath.  It was getting killed too quickly.
