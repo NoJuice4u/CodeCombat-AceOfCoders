@@ -1,6 +1,13 @@
 [KNOWN ISSUES]
-- There's something weird with the escape vector calculations when the target is in multiple danger zones.  It might involve the edge case where the unit is in only one danger zone, but the predicted path sits in another danger zone.  It's been observed that the AI will actually walk into one of the danger zones instead of finding the optimal path out.
-- Logic for capturing points is not optimal.  If danger zones exist between the capture point and unit, it bounces for some reason even though it's the same logic as the assault logic.
+- There's something weird with the escape vector calculations when the target is in multiple danger zones.  It might involve the edge case where the unit is in only one danger zone, but the predicted path sits in another danger zone.  It's been observed that the AI will actually walk into one of the danger zones instead of finding the optimal path out.  Very likely happens when transitioning between number of danger zones, the average vector can "jump" to the other side of the unit, causing the vector calculations to be thrown off.  Need some kind of area solver to address this.  That's probably not the correct words, but I know what I mean.
+- Logic for job assinment for capture points is not optimal.  Would benefit if it assigned to the nearest free capture point, rather then down the list.  The benefit is only minor, since we've sorted the capture points.
+- Escape Vector calculations should include enemy archer range, and make sure my units stay out of enemy range when it's escaping.  Currently has a risk of escaping and entering enemy range which leaves them vulnerable.
+- Siege strategy attempts to prevent multiple artillery from sieging the same point at the same time.  That obviously isn't working.  Even better, would be forward prediction so that it doesn't siege a spot that we can expect to be cleared out if we estimate that the target under siege is going to die.  Right now, it often sieges the same spot once more due to timing issues.
+- Rest point calculations for artillery is probably wrong since they converge on the same spot.  The rest point is supposed to separate them a bit to increase siege coverage.
+[Version 15]
+- Added a danger zone near the vector that I would throw the enemy giant if hurl is available so I don't help my opponent aoe my units.
+- Possible fix for the weird escape vector calculations?  Brain not quite working right now...
+- Maybe it was doubling up on daner zones.  Changed an if to else-if
 [Version 14]
 - Added a null check.  Stupid nulls.
 [Version 13]

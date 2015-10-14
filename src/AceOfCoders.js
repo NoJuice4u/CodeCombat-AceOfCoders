@@ -230,6 +230,11 @@ this.controlHero = function()
 this.findDangerZones = function()
 {
 	if (nearestGoliath !== null) dangerZones.push({ "Point": nearestGoliath.pos, "Radius": 15, "Type": nearestGoliath.type});
+	if (nearestGoliath !== null && this.distanceTo(nearestGoliath) < 25 && this.isReady("hurl")) 
+	{
+		var oppSlamPoint = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, nearestGoliath.pos)), 8), this.pos);
+		dangerZones.push({ "Point": oppSlamPoint, "Radius": 17, "Type": nearestGoliath.type});
+	}
 	for (var i = 0; i < missiles.length; ++i) 
 	{
 		var missile = missiles[i];
@@ -275,7 +280,7 @@ this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange, exc
 			summedVector = Vector.add(summedVector, dangerObjects[dangerZoneKey].Point);
 			divisor += 1;
 		}
-		if (targetPos.distance(dangerObjects[dangerZoneKey].Point) <= dangerObjects[dangerZoneKey].Radius && tar.distance(targetPos) >= atkRange - 5)
+		else if (targetPos.distance(dangerObjects[dangerZoneKey].Point) <= dangerObjects[dangerZoneKey].Radius && tar.distance(targetPos) >= atkRange - 5)
 		{
 			headingToDanger = true;
 			summedVector = Vector.add(summedVector, dangerObjects[dangerZoneKey].Point);
@@ -296,11 +301,10 @@ this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange, exc
 	else newHeading = new Vector(0, -1);
 	
 	newHeading = Vector.rotate(newHeading, rotation);
-	
-	// if(inDanger === true && headingToDanger === true) return Vector.normalize(Vector.subtract(pos, averagedSum)); // GTFO
-	
-	if(this.now() <= 3) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Escape on tangent.  Probably not needed.
+
+	if(this.now() <= 3) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Scatter.  Probably not needed
 	if(inDanger === false && headingToDanger === true) return newHeading; // Run on tangent
+	if(inDanger === true && headingToDanger === true) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Get Out
 	return Vector.normalize(Vector.add(Vector.normalize(Vector.subtract(pos, averagedSum)), newHeading)); // Escape on tangent
 };
 
@@ -603,4 +607,3 @@ loop {
 	}
 	this.controlHero();
 }
-
