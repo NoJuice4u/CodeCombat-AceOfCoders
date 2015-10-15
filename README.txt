@@ -4,6 +4,14 @@
 - Escape Vector calculations should include enemy archer range, and make sure my units stay out of enemy range when it's escaping.  Currently has a risk of escaping and entering enemy range which leaves them vulnerable.
 - Siege strategy attempts to prevent multiple artillery from sieging the same point at the same time.  That obviously isn't working.  Even better, would be forward prediction so that it doesn't siege a spot that we can expect to be cleared out if we estimate that the target under siege is going to die.  Right now, it often sieges the same spot once more due to timing issues.
 - Rest point calculations for artillery is probably wrong since they converge on the same spot.  The rest point is supposed to separate them a bit to increase siege coverage.
+- Soldiers could probably benefit from attacking the lowest-health target if more than one target is within melee range.
+- The "Blocking" protection against throw is hard-coded for archers.  Should be extended to include Artillery.
+- Defend logic was a lazy attempt, since it only happens when I have an abundance of units.
+[Version 16]
+- My stupid soldiers were running away from enemy soldiers.  Stupid cowardly soldiers.
+- Ice Yak Protection.
+- The throw command prevents execution for 1 second apparently, which is dangerous for any unit that is in executing "AttacK" but out of range.  They risk over-extending because the "Attack" they are given is effectively a move, so they won't start attacking until we regain control.  Therefore, I stop all my archers if the game is early enough to prevent the opponent from getting a lucky, critical lead against me during this brief moment of vulnerability.
+- Extended the initial build order, because it would sometimes spawn a soldier.  It's too early to spawn a capture point soldier at this point.
 [Version 15]
 - Added a danger zone near the vector that I would throw the enemy giant if hurl is available so I don't help my opponent aoe my units.
 - Possible fix for the weird escape vector calculations?  Brain not quite working right now...

@@ -3,7 +3,7 @@ var restPoint = {};
 var home = {};
 var away = {};
 var enemyTeam = "";
-var initialBuildOrder = ["artillery", "archer", "archer", "archer", "archer"];
+var initialBuildOrder = ["artillery", "archer", "archer", "archer", "archer", "archer"];
 var nearestGoliath = this.findNearest(this.findByType("goliath", enemies));
 var assignedJobIndex = 0;
 var lastArtillerySpawn = -10;
@@ -115,7 +115,7 @@ this.buildArmy = function()
 				if (fArrowTowers[fArrowTowerIndex].health > 0) fArrowTowersCount += 1;
 			}
 			
-			if (fSoldierCount * 2 < eSoldierCount - 2) type = "soldier"; // Protection against mass soldiers.
+			if (fSoldierCount * 2 < eSoldierCount - 4) type = "soldier"; // Protection against mass soldiers.
 			else if (this.now() > 15 && myPoints + enemyPoints < 7 && fSoldierCount < 7 - enemyPoints - myPoints) type = "soldier"; // Capture!
 			else if (eArtilleryCount === 0 && fArrowTowersCount < 1 && nearestGoliath !== null && this.distanceTo(nearestGoliath) < 30) type = "arrow-tower"; // No enemy artillery?  Tower up!
 			else if (fArcherCount >= eArcherCount + 2 && fArcherCount > 2 && fArtilleryCount < 2 && lastArtillerySpawn < this.now()) type = "artillery"; // Maintain up to 2 artillery.
@@ -160,6 +160,21 @@ this.controlHero = function()
 	{
 		// If the goliath wants to get up close and personal, make sure he has difficulty spawning archers,
 		// since archers are really the only ones that can outrun the goliath.
+		if (this.findNearest(this.findByType("ice-yak", enemies)) !== null)
+		{
+			this.move(home);
+			return;
+		}
+		if(this.isReady("throw"))
+		{
+			if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 25) this.throw(nearestArtillery);
+			else if (nearestTower !== null && this.distanceTo(nearestTower) < 25) this.throw(nearestTower);
+			else if (nearestArcher !== null && this.distanceTo(nearestArcher) < 25 && nearestGoliath.gold < 25)
+			{
+				this.blocking();
+				this.throw(nearestArcher);
+			}
+		}
 		if(nearestGoliath !== null && (this.health * 1.75 < nearestGoliath.health || retreat > this.now()))
 		{
 			if (nearestTower !== null && this.distanceTo(nearestTower) < 10 && this.distanceTo(home) > 75)
@@ -193,16 +208,9 @@ this.controlHero = function()
 		var numInStompRange = 0;
 		for(var eIndex in enemies)
 		{
-			if (this.distanceTo(enemies[eIndex]) <= 10) numInStompRange += 1;
+			if (this.distanceTo(enemies[eIndex]) <= 15 && (enemies[eIndex].Type == "soldier" || enemies[eIndex].Type == "archer")) numInStompRange += 1;
 		}
-		
-		// Hack for the "Artillery on Steriods" issue, so I don't waste a throw.
-		if (this.now() > 7)
-		{
-			if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 25 && this.isReady("throw")) this.throw(nearestArtillery);
-			else if (nearestTower !== null && this.distanceTo(nearestTower) < 25 && this.isReady("throw")) this.throw(nearestTower);
-			else if (nearestArcher !== null && this.distanceTo(nearestArcher) < 25 && nearestGoliath.gold < 25 && this.isReady("throw")) this.throw(nearestArcher);
-		}
+
 		if (nearestArtillery !== null && this.distanceTo(nearestArtillery) < 5) this.attack(nearestArtillery);
 		if (numInStompRange >= 3 && this.isReady("stomp")) this.stomp();
 		if (nearestGoliath !== null && this.distanceTo(away) < away.distance(nearestGoliath.pos) && this.isReady("stomp")) this.stomp();
@@ -215,6 +223,7 @@ this.controlHero = function()
 			nearestPoint.pos.distance(this.pos) > nearestPoint.pos.distance(nearestGoliath.pos) &&
 			this.isReady("hurl"))
 				this.hurl(nearestGoliath, throwPoint);
+
 		if (this.distanceTo(nearestEnemy) < 25 && nearestEnemy.type != "archer" && nearestEnemy.type != "goliath") this.attack(nearestEnemy);
 		else if (this.distanceTo(restPoint) < 10) this.attack(nearestEnemy);
 		else this.move(restPoint);
@@ -301,8 +310,8 @@ this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange, exc
 	else newHeading = new Vector(0, -1);
 	
 	newHeading = Vector.rotate(newHeading, rotation);
-
-	if(this.now() <= 3) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Scatter.  Probably not needed
+	
+	if(this.now() <= 3) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Scatter
 	if(inDanger === false && headingToDanger === true) return newHeading; // Run on tangent
 	if(inDanger === true && headingToDanger === true) return Vector.normalize(Vector.subtract(pos, averagedSum)); // Get Out
 	return Vector.normalize(Vector.add(Vector.normalize(Vector.subtract(pos, averagedSum)), newHeading)); // Escape on tangent
@@ -361,7 +370,8 @@ this.capturePoint = function(friends, quadrant)
 	{
 		var friend = friends[allyCaptureJobIndex];
 		var targetPos = points[quadrant].pos;
-		var escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0, "none");
+		if(friend.type != "soldier") escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0, "none");
+		else escapeVector = this.getEscapeVector(friend.pos, friend.pos, dangerZones, 25, 0, "soldier");
 		
 		if(this.now() < 5)
 		{
@@ -445,7 +455,7 @@ this.assault = function(friends)
 
 		if(escapeVector === false)
 		{
-			if(nearestThreat !== null)
+			if(nearestThreat !== null && friend.distanceTo(nearestThreat) < 30)
 			{
 				this.command(friend, "attack", nearestThreat);
 				continue;
@@ -453,7 +463,7 @@ this.assault = function(friends)
 			else
 			{
 				action = "move";
-				destination = this.pos;
+				destination = Vector.add(Vector.multiply(Vector.normalize(Vector.subtract(this.pos, friend.pos)), 10), friend.pos);
 			}
 		}
 		else
@@ -564,6 +574,18 @@ this.tower = function(friends)
 		if(eTar === null || friend.distanceTo(eTar) > 30) eTar = friend.findNearest(this.findByType("soldier", enemies));
 		if(eTar === null || friend.distanceTo(eTar) > 30) eTar = friend.findNearest(enemies);
 		this.command(friend, "attack", eTar);
+	}
+};
+
+this.blocking = function(friends)
+{
+	for(var fIndex in friends)
+	{
+		friend = friends[fIndex];
+		if(friend.health <= 0) continue;
+		var eTar = friend.findNearest(enemies);
+		if(eTar === null || friend.distanceTo(eTar) > 25) this.command(friend, "move", friend.pos);
+		else this.command(friend, "attack", eTar);
 	}
 };
 
