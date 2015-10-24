@@ -55,6 +55,7 @@ Assign the newly spawned unit a job.  No special logic.  It looks at "Roles" to 
 
 Data Structures
 1. Job Queue
+```
 var jobQueue = {
 	"DefendA": {"Job": "Capture", "Quadrant": 1, "TargetSize": 1, "Members": []},
 	"DefendB": {"Job": "Capture", "Quadrant": 2, "TargetSize": 1, "Members": []},
@@ -70,14 +71,17 @@ var jobQueue = {
 	"GoNuts": {"Job": "Defend", "TargetSize": 100, "Members": []},
 	"Tower": {"Job": "Tower", "TargetSize": 100, "Members": []}
 };
+```
 
 2. Roles
+```
 var roles = {
 	"soldier": ["Capture", "Defend"],
 	"archer": ["Capture", "Assault", "Guard", "Defend"],
 	"artillery": ["Siege"],
 	"arrow-tower": ["Tower"]
 };
+```
 
 Unit Strategy
 1. CapturePoint
