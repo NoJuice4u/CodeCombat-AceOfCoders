@@ -6,7 +6,7 @@ You can find my code, along with some version history here:
 https://github.com/NoJuice4u/CodeCombat-AceOfCoders
 
 General Logic
-1. BuildArmy
+##BuildArmy
 At the start of the match, I have a hard-coded build strategy of "Artillery", "Archer", "Archer", "Archer", "Archer", "Archer".  Once I build those 6 units, then I switch over to custom logic that depends on various factors:
 	* If the enemy has many soldiers, I produce soldiers.  Attempt to maintain at least half the soldiers the opponent has minus 1.
 	* If there is an empty capture point and we're out of the opening phase of the match, spawn soldiers until we should have enough to capture all uncontested points.
@@ -16,7 +16,7 @@ At the start of the match, I have a hard-coded build strategy of "Artillery", "A
 
 Aside from the first artillery, I spawn all my units 5 units away from my position, farthest from the enemy goliath.  That gives the unit the best chance to avoid being one-shot by the goliath after spawning.
 
-2. Control Hero
+##Control Hero
 This is probably the ugliest part of my code.  I can't even guarantee that my point-by-point breakdown is 100% accurate:
 	* If I'm really close to an enemy tower, destroy it.
 	* If my health is much lower than my enemy, run away.  Attempt to "Hurl" the enemy goliath if I'm near the edge, to kite as long as possible.
@@ -32,7 +32,7 @@ This is probably the ugliest part of my code.  I can't even guarantee that my po
 	* Attack the nearest enemy if I am within 10 units of the rest point.
 	* Move to the "Rest Point".
 
-3. FindDangerZones
+##FindDangerZones
 This is essentially the backbone of my strategy.  While many of the tournament players have a strategy to move their units out of AoE effects, the difference with mine is that I also calculate whether my unit will walk into an AoE effect, and move along the perimeter to get closer to the target, while staying out of danger.  That's why they rarely "bounce in and out".  However, there's a few edge-case issues that cause the bounces to occur when multiple AoE's overlap.  Each "Danger Zone" has a type category and a defined radius, so that I can keep a short distance from soldiers, medium distance from the boulder, and great distance from the artillery shell.
 I take these into consideration as "AoE Effects":
 * All artillery shells (obviously).
@@ -42,10 +42,10 @@ I take these into consideration as "AoE Effects":
 * The farthest point from the enemy goliath that is within 8 units of my goliath, if I am close enough, and hurl is not on cooldown.  (Where I will likely hurl him)
 * Enemy Soldiers.
 
-4. GetEscapeVector - this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange, excludeType)
+##GetEscapeVector - this.getEscapeVector = function(pos, tar, dangerObjects, atkRange, minRange, excludeType)
 Use the data gathered from "FindDangerZones" to calculate whether to run away from the center of impact, or to walk the perimeter.
 
-5. AssignJobs
+##AssignJobs
 Assign the newly spawned unit a job.  No special logic.  It looks at "Roles" to see what unit it's given, and then goes down the Job Queue to find a matching "Job" to assign a unit to.
 
 * If the Job is "Capture", it is mapped to one of the capture points via "Quadrant".  Only 1 unit is assigned this job.
@@ -53,8 +53,8 @@ Assign the newly spawned unit a job.  No special logic.  It looks at "Roles" to 
 * If the Job is "Siege", the unit is assigned a "Rest Position" to try to sit at, which is near the middle of the map for maximum coverage.
 * If the Job is "Defend", protect the Artillery.  With a size of 100, it's unlikely that I overflow this.
 
-Data Structures
-1. Job Queue
+##Data Structures
+Job Queue
 ```
 var jobQueue = {
 	"DefendA": {"Job": "Capture", "Quadrant": 1, "TargetSize": 1, "Members": []},
@@ -73,7 +73,7 @@ var jobQueue = {
 };
 ```
 
-2. Roles
+Roles
 ```
 var roles = {
 	"soldier": ["Capture", "Defend"],
@@ -83,30 +83,30 @@ var roles = {
 };
 ```
 
-Unit Strategy
-1. CapturePoint
+## Unit Strategy
+CapturePoint
 * Uses getEscapeVector to dodge AoE.
 * Move towards the capture point.
 * Defend the capture point.
 
-2. Assault
+Assault
 * Uses getEscapeVector to dodge AoE.
 * Prioritize artillery within range.  Then, towers, archers, anything else.
 * Has custom code for the first few seconds of a match to "Fan out" to prevent all archers going to the same side which would mean we're not pressuring the other side.
 
-3. Siege
+Siege
 * Uses getEscapeVector to dodge AoE.
 * Siege any artillery within range + 20.
 * Siege any arrow-towers within range.
 * Siege any capture points within range.
 * Siege nearest capture point owned by enemy.
 
-4. Defend
+Defend
 * Uses getEscapeVector to dodge AoE
 * Pick an artillery, and defend it.
 * If no artillery, defend something?  (Pretty sure I did someting stupid in the code there but I'm too scared to change it now).
 
-5. Tower
+Tower
 * Priority 1: Archers within range.
 * Priority 2: Soldiers within range.
 * Priority 3: Anything within range.
